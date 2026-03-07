@@ -87,7 +87,7 @@ const defaultConfig = {
     { value: 'polaris', label: '北极星', hasSkin: true }
   ],
   operatorSkinOptions: [
-    { value: 'none', label: '选项', hasSkin: false },
+    { value: 'none', label: '无皮肤', hasSkin: false },
     { value: 'lingxiao', label: '凌霄戍卫', hasSkin: true },
     { value: 'gold_rose', label: '蚀金玫瑰', hasSkin: true },
     { value: 'ink_cloud', label: '水墨云图', hasSkin: true },
@@ -122,10 +122,12 @@ function shouldMigrateKnifeOptions(options) {
 function shouldMigrateOperatorOptions(options) {
   if (!Array.isArray(options)) return true;
   const hasEnglish = options.some((item) => /[A-Za-z]/.test(String(item?.label || '')));
+  const noneOption = options.find((item) => item?.value === 'none');
+  const noneLabelMismatch = !noneOption || String(noneOption.label || '') !== '无皮肤';
   const required = ['none', 'lingxiao', 'gold_rose', 'ink_cloud', 'midnight_postman', 'skyline', 'wisadel'];
   const valueSet = new Set(options.map((item) => item?.value));
   const missingRequired = required.some((value) => !valueSet.has(value));
-  return hasEnglish || missingRequired;
+  return hasEnglish || missingRequired || noneLabelMismatch;
 }
 
 function migrateConfigToChineseIfNeeded() {
