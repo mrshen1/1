@@ -34,6 +34,38 @@ function writeJson(filePath, value) {
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf8');
 }
 
+function normalizeNickname(nickname) {
+  return String(nickname || '').trim().toLowerCase();
+}
+
+function getRecordNickname(record) {
+  return normalizeNickname(record?.formData?.gameName);
+}
+
+function dedupeRecordsByNickname(records) {
+  const seen = new Set();
+  const deduped = [];
+
+  for (const record of records) {
+    const nickname = getRecordNickname(record);
+
+    // Keep records without nickname as-is.
+    if (!nickname) {
+      deduped.push(record);
+      continue;
+    }
+
+    if (seen.has(nickname)) {
+      continue;
+    }
+
+    seen.add(nickname);
+    deduped.push(record);
+  }
+
+  return deduped;
+}
+
 const defaultConfig = {
   noticeContent:
     '[Seller Notice]\n1. Please provide valid account info.\n2. The quote is for reference only.\n3. Account transactions carry risk.',
@@ -86,7 +118,16 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/records', (req, res) => {
   const data = readJson(RECORDS_FILE, { records: [] });
-  res.json({ success: true, data: data.records || [] });
+  data.records = Array.isArray(data.records) ? data.records : [];
+  const deduped = dedupeRecordsByNickname(data.records);
+
+  // Cleanup legacy duplicates in storage.
+  if (deduped.length !== data.records.length) {
+    data.records = deduped;
+    writeJson(RECORDS_FILE, data);
+  }
+
+  res.json({ success: true, data: deduped });
 });
 
 app.post('/api/records', (req, res) => {
@@ -106,7 +147,15 @@ app.post('/api/records', (req, res) => {
   };
 
   data.records = Array.isArray(data.records) ? data.records : [];
+  const incomingNickname = normalizeNickname(formData?.gameName);
+
+  // Overwrite existing record when nickname is the same.
+  if (incomingNickname) {
+    data.records = data.records.filter((record) => getRecordNickname(record) !== incomingNickname);
+  }
+
   data.records.unshift(newRecord);
+  data.records = dedupeRecordsByNickname(data.records);
 
   if (data.records.length > 500) {
     data.records = data.records.slice(0, 500);
@@ -128,15 +177,24 @@ app.put('/api/records/:id', (req, res) => {
     return res.status(404).json({ success: false, message: 'Record not found' });
   }
 
-  data.records[index] = {
+  const updatedRecord = {
     ...data.records[index],
     formData: formData ?? data.records[index].formData,
     ratio: ratio ?? data.records[index].ratio,
     price: price ?? data.records[index].price
   };
 
+  data.records[index] = updatedRecord;
+  // Treat edited record as the latest one and keep one record per nickname.
+  data.records = [updatedRecord, ...data.records.filter((record) => record.id !== id)];
+  data.records = dedupeRecordsByNickname(data.records);
+
+  if (data.records.length > 500) {
+    data.records = data.records.slice(0, 500);
+  }
+
   writeJson(RECORDS_FILE, data);
-  res.json({ success: true, data: data.records[index] });
+  res.json({ success: true, data: updatedRecord });
 });
 
 app.delete('/api/records/:id', (req, res) => {
