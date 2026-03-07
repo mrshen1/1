@@ -68,7 +68,7 @@ function dedupeRecordsByNickname(records) {
 
 const defaultConfig = {
   noticeContent:
-    '[Seller Notice]\n1. Please provide valid account info.\n2. The quote is for reference only.\n3. Account transactions carry risk.',
+    '【卖家须知】\n\n1. 请确保填写的账号信息真实有效，虚假信息将导致估价不准确。\n\n2. 回收价格仅供参考，最终价格以实际验号为准。\n\n3. 账号交易存在一定风险，请谨慎操作。\n\n4. 我们承诺保护您的个人信息安全，不会泄露给第三方。\n\n5. 如有疑问，请联系客服咨询。',
   insuranceOptions: [
     { value: '2', label: '2', ratio: 40 },
     { value: '4', label: '4', ratio: 38 },
@@ -76,23 +76,24 @@ const defaultConfig = {
     { value: '9', label: '9', ratio: 34 }
   ],
   knifeSkinOptions: [
-    { value: 'none', label: 'None', hasSkin: false },
-    { value: 'dark_star', label: 'Dark Star', hasSkin: true },
-    { value: 'dragon_fang', label: 'Dragon Fang', hasSkin: true },
-    { value: 'creed', label: 'Creed', hasSkin: true },
-    { value: 'chixiao', label: 'Chixiao', hasSkin: true },
-    { value: 'mercy', label: 'Mercy', hasSkin: true },
-    { value: 'shadow_edge', label: 'Shadow Edge', hasSkin: true },
-    { value: 'black_sea', label: 'Black Sea', hasSkin: true },
-    { value: 'polaris', label: 'Polaris', hasSkin: true }
+    { value: 'none', label: '无刀皮', hasSkin: false },
+    { value: 'dark_star', label: '暗星', hasSkin: true },
+    { value: 'dragon_fang', label: '龙牙', hasSkin: true },
+    { value: 'creed', label: '信条', hasSkin: true },
+    { value: 'chixiao', label: '赤霄', hasSkin: true },
+    { value: 'mercy', label: '怜悯', hasSkin: true },
+    { value: 'shadow_edge', label: '影锋', hasSkin: true },
+    { value: 'black_sea', label: '黑海', hasSkin: true },
+    { value: 'polaris', label: '北极星', hasSkin: true }
   ],
   operatorSkinOptions: [
-    { value: 'none', label: 'None', hasSkin: false },
-    { value: 'lingxiao', label: 'Lingxiao', hasSkin: true },
-    { value: 'gold_rose', label: 'Gold Rose', hasSkin: true },
-    { value: 'ink_cloud', label: 'Ink Cloud', hasSkin: true },
-    { value: 'skyline', label: 'Skyline', hasSkin: true },
-    { value: 'wisadel', label: 'Wisadel', hasSkin: true }
+    { value: 'none', label: '选项', hasSkin: false },
+    { value: 'lingxiao', label: '凌霄戍卫', hasSkin: true },
+    { value: 'gold_rose', label: '蚀金玫瑰', hasSkin: true },
+    { value: 'ink_cloud', label: '水墨云图', hasSkin: true },
+    { value: 'midnight_postman', label: '午夜邮差', hasSkin: true },
+    { value: 'skyline', label: '天际线', hasSkin: true },
+    { value: 'wisadel', label: '维什戴尔', hasSkin: true }
   ],
   bottomImages: [],
   feeConfig: {
@@ -103,6 +104,56 @@ const defaultConfig = {
 
 initDataFile(RECORDS_FILE, { records: [] });
 initDataFile(CONFIG_FILE, defaultConfig);
+
+function shouldMigrateNotice(noticeContent) {
+  const text = String(noticeContent || '');
+  return !text.includes('卖家须知') || text.includes('[Seller Notice]');
+}
+
+function shouldMigrateKnifeOptions(options) {
+  if (!Array.isArray(options)) return true;
+  const hasEnglish = options.some((item) => /[A-Za-z]/.test(String(item?.label || '')));
+  const required = ['dark_star', 'dragon_fang', 'creed', 'chixiao', 'mercy', 'shadow_edge', 'black_sea', 'polaris'];
+  const valueSet = new Set(options.map((item) => item?.value));
+  const missingRequired = required.some((value) => !valueSet.has(value));
+  return hasEnglish || missingRequired;
+}
+
+function shouldMigrateOperatorOptions(options) {
+  if (!Array.isArray(options)) return true;
+  const hasEnglish = options.some((item) => /[A-Za-z]/.test(String(item?.label || '')));
+  const required = ['none', 'lingxiao', 'gold_rose', 'ink_cloud', 'midnight_postman', 'skyline', 'wisadel'];
+  const valueSet = new Set(options.map((item) => item?.value));
+  const missingRequired = required.some((value) => !valueSet.has(value));
+  return hasEnglish || missingRequired;
+}
+
+function migrateConfigToChineseIfNeeded() {
+  const current = readJson(CONFIG_FILE, defaultConfig);
+  const next = { ...current };
+  let changed = false;
+
+  if (shouldMigrateNotice(current.noticeContent)) {
+    next.noticeContent = defaultConfig.noticeContent;
+    changed = true;
+  }
+
+  if (shouldMigrateKnifeOptions(current.knifeSkinOptions)) {
+    next.knifeSkinOptions = defaultConfig.knifeSkinOptions;
+    changed = true;
+  }
+
+  if (shouldMigrateOperatorOptions(current.operatorSkinOptions)) {
+    next.operatorSkinOptions = defaultConfig.operatorSkinOptions;
+    changed = true;
+  }
+
+  if (changed) {
+    writeJson(CONFIG_FILE, next);
+  }
+}
+
+migrateConfigToChineseIfNeeded();
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
